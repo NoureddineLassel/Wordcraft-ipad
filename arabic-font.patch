@@ -1,0 +1,37 @@
+diff --git a/crates/fonts/src/fontdb.rs b/crates/fonts/src/fontdb.rs
+index 816ac27..b67f26b 100644
+--- a/crates/fonts/src/fontdb.rs
++++ b/crates/fonts/src/fontdb.rs
+@@ -38,6 +38,8 @@ static BUNDLED: &[&[u8]] = &[
+     include_bytes!("../../../assets/fonts/Inter-Medium.ttf"),
+     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
+     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
++    include_bytes!("../../../assets/fonts/NotoNaskhArabic-Regular.ttf"),
++    include_bytes!("../../../assets/fonts/NotoNaskhArabic-Bold.ttf"),
+ ];
+ 
+ #[derive(Clone)]
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 441ff2a..67ca213 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -441,15 +441,17 @@ pub fn font_definitions(prefer_hans: bool, system_cjk: bool) -> FontDefinitions
+     add(&mut fonts, "InterSemiBold", include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"));
+     add(&mut fonts, "SourceSans", include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"));
+     add(&mut fonts, "Mono", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"));
++    add(&mut fonts, "Arabic", include_bytes!("../../../assets/fonts/NotoNaskhArabic-Regular.ttf"));
+     if let Some(prop) = fonts.families.get_mut(&FontFamily::Proportional) {
+         prop.insert(0, "Inter".into());
+         prop.push("SourceSans".into());
++        prop.push("Arabic".into());
+     }
+     if let Some(m) = fonts.families.get_mut(&FontFamily::Monospace) {
+         m.insert(0, "Mono".into());
+     }
+-    fonts.families.insert(FontFamily::Name("medium".into()), vec!["InterMedium".into(), "Inter".into(), "SourceSans".into()]);
+-    fonts.families.insert(FontFamily::Name("semibold".into()), vec!["InterSemiBold".into(), "Inter".into(), "SourceSans".into()]);
++    fonts.families.insert(FontFamily::Name("medium".into()), vec!["InterMedium".into(), "Inter".into(), "SourceSans".into(), "Arabic".into()]);
++    fonts.families.insert(FontFamily::Name("semibold".into()), vec!["InterSemiBold".into(), "Inter".into(), "SourceSans".into(), "Arabic".into()]);
+     let add_cjk = |fonts: &mut FontDefinitions, name: String, data: FontData| {
+         fonts.font_data.insert(name.clone(), Arc::new(data));
+         for fam in [FontFamily::Proportional, FontFamily::Name("medium".into()), FontFamily::Name("semibold".into())] {
