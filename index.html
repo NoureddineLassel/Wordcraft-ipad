@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="WordCraft">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>WordCraft</title>
+  <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
+  
+<script type="module">
+import init, * as bindings from './wordcraft-web-2b23295263b9b3fb.js';
+const wasm = await init({ module_or_path: './wordcraft-web-2b23295263b9b3fb_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6; }
+    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
+  </style>
+<link rel="modulepreload" href="./wordcraft-web-2b23295263b9b3fb.js" crossorigin="anonymous" integrity="sha384-v+QWXwsFBVgFVCvgVyU4XXAxxuFxcLeI9HNMPMlMsfN/OP6BBk++wMUUpFTocKij"><link rel="preload" href="./wordcraft-web-2b23295263b9b3fb_bg.wasm" crossorigin="anonymous" integrity="sha384-luTPKSblhahhIXffyKWu6dmABheqZFAC6oTGLaT+hTEzQ4FHpBVC8pMLBFSnNRie" as="fetch" type="application/wasm"></head>
+<body>
+  <canvas id="wordcraft_canvas"></canvas>
+  <div id="wordcraft_loading">Loading WordCraft&hellip;</div>
+</body>
+</html>
