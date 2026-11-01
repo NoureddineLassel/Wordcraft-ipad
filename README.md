@@ -8,4 +8,8 @@ Rebuild: `cd apps/wordcraft-web && trunk build --release` in the upstream repo, 
 
 ## Arabic support
 
-The upstream web build has no Arabic font (it cannot read system fonts in the browser), so Arabic showed as boxes. This build bundles Noto Naskh Arabic Regular/Bold (SIL OFL 1.1, see `OFL-NotoNaskhArabic.txt`) as a document and interface font; the code change is in `arabic-font.patch` (fonts go in upstream `assets/fonts/`).
+The upstream web build has no Arabic font (it cannot read system fonts in the browser), so Arabic showed as boxes. This build bundles Noto Naskh Arabic Regular/Bold (SIL OFL 1.1, see `OFL-NotoNaskhArabic.txt`) as a document and interface font; the code change is in `ipad.patch` (fonts go in upstream `assets/fonts/`).
+
+## Touch and Apple Pencil
+
+eframe turned both the pointer events and the touch events of one touch into presses, so every tap arrived twice and read as a double-click: a tap selected a word instead of placing the caret, and drags were unreliable. `index.html` now keeps only the touch path for finger and pen (mouse unchanged) and turns off the browser's own panning, selection callout and magnifier on the canvas. Included in `ipad.patch`.

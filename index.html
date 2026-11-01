@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="WordCraft">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>WordCraft</title>
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
@@ -21,11 +21,22 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6; }
-    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6;
+      overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    /* Touch and pen go to the editor only: no browser panning, text selection, callout or magnifier. */
+    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
   </style>
+  <script>
+    // eframe turns both the pointer events and the touch events of one finger or pen touch into
+    // presses, so every tap arrived twice and read as a double-click (a tap selected a word, a
+    // double tap a paragraph). Touch and pen keep only the touch path; the mouse is unchanged.
+    for (const name of ["pointerdown", "pointerup", "pointermove", "pointercancel"]) {
+      window.addEventListener(name, (e) => { if (e.pointerType !== "mouse") e.stopImmediatePropagation(); }, true);
+    }
+  </script>
 <link rel="modulepreload" href="./wordcraft-web-9ad9fd3b15af2459.js" crossorigin="anonymous" integrity="sha384-v+QWXwsFBVgFVCvgVyU4XXAxxuFxcLeI9HNMPMlMsfN/OP6BBk++wMUUpFTocKij"><link rel="preload" href="./wordcraft-web-9ad9fd3b15af2459_bg.wasm" crossorigin="anonymous" integrity="sha384-yMpnMrHii0C6giKHPzB1ZwbYktN9O7MWzKrdiL3ZiOXyPyJMgtRQZkwVBuSayvpg" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
