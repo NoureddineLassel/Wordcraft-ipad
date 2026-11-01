@@ -34,8 +34,82 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
     // presses, so every tap arrived twice and read as a double-click (a tap selected a word, a
     // double tap a paragraph). Touch and pen keep only the touch path; the mouse is unchanged.
     for (const name of ["pointerdown", "pointerup", "pointermove", "pointercancel"]) {
-      window.addEventListener(name, (e) => { if (e.pointerType !== "mouse") e.stopImmediatePropagation(); }, true);
+      window.addEventListener(name, (e) => { if (e.isTrusted && e.pointerType !== "mouse") e.stopImmediatePropagation(); }, true);
     }
+
+    // Two fingers scroll the page; one finger or the pen still places the caret and selects.
+    // A first touch is held back briefly: a second finger landing in that window makes the gesture
+    // a scroll, and the editor never sees a press. Otherwise the press is replayed as a mouse
+    // press and the rest of the touch goes through unchanged.
+    (() => {
+      const HOLD_MS = 90;
+      let mode = "idle"; // idle | pending | single | scroll
+      let start = null, timer = 0, last = null;
+      const canvas = () => document.getElementById("wordcraft_canvas");
+      const onCanvas = (e) => e.target === canvas();
+      const mouse = (type, x, y, buttons) => canvas().dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: "mouse", isPrimary: true,
+        button: 0, buttons, clientX: x, clientY: y }));
+      const center = (touches) => {
+        let x = 0, y = 0;
+        for (const t of touches) { x += t.clientX; y += t.clientY; }
+        return { x: x / touches.length, y: y / touches.length };
+      };
+      const commit = () => {
+        clearTimeout(timer);
+        if (mode !== "pending") return;
+        mode = "single";
+        mouse("pointerdown", start.x, start.y, 1);
+      };
+      const toScroll = (e) => {
+        if (mode === "pending") clearTimeout(timer);
+        if (mode === "single") mouse("pointerup", last.x, last.y, 0);
+        mode = "scroll";
+        last = center(e.touches);
+      };
+      window.addEventListener("touchstart", (e) => {
+        if (!onCanvas(e) && mode === "idle") return;
+        if (e.touches.length >= 2) {
+          toScroll(e);
+          e.stopImmediatePropagation(); e.preventDefault();
+          return;
+        }
+        if (mode !== "idle") { e.stopImmediatePropagation(); return; }
+        const t = e.touches[0];
+        start = last = { x: t.clientX, y: t.clientY };
+        mode = "pending";
+        timer = setTimeout(commit, HOLD_MS);
+        e.stopImmediatePropagation(); e.preventDefault();
+      }, { capture: true, passive: false });
+      window.addEventListener("touchmove", (e) => {
+        if (mode === "scroll") {
+          if (e.touches.length >= 2) {
+            const c = center(e.touches);
+            canvas().dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: c.x, clientY: c.y }));
+            canvas().dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaMode: 0,
+              deltaX: last.x - c.x, deltaY: last.y - c.y, clientX: c.x, clientY: c.y }));
+            last = c;
+          }
+          e.stopImmediatePropagation(); e.preventDefault();
+          return;
+        }
+        if (mode === "pending") commit();
+        if (mode === "single" && e.touches.length) last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }, { capture: true, passive: false });
+      const end = (e) => {
+        if (mode === "scroll") {
+          if (e.touches.length === 0) mode = "idle";
+          else last = center(e.touches);
+          e.stopImmediatePropagation(); e.preventDefault();
+          return;
+        }
+        if (mode === "pending") commit(); // a quick tap: press now, the release follows
+        if (e.type === "touchcancel" && mode === "single") mouse("pointerup", last.x, last.y, 0);
+        if (e.touches.length === 0) mode = "idle";
+      };
+      window.addEventListener("touchend", end, { capture: true, passive: false });
+      window.addEventListener("touchcancel", end, { capture: true, passive: false });
+    })();
   </script>
 <link rel="modulepreload" href="./wordcraft-web-9ad9fd3b15af2459.js" crossorigin="anonymous" integrity="sha384-v+QWXwsFBVgFVCvgVyU4XXAxxuFxcLeI9HNMPMlMsfN/OP6BBk++wMUUpFTocKij"><link rel="preload" href="./wordcraft-web-9ad9fd3b15af2459_bg.wasm" crossorigin="anonymous" integrity="sha384-yMpnMrHii0C6giKHPzB1ZwbYktN9O7MWzKrdiL3ZiOXyPyJMgtRQZkwVBuSayvpg" as="fetch" type="application/wasm"></head>
 <body>

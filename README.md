@@ -13,3 +13,5 @@ The upstream web build has no Arabic font (it cannot read system fonts in the br
 ## Touch and Apple Pencil
 
 eframe turned both the pointer events and the touch events of one touch into presses, so every tap arrived twice and read as a double-click: a tap selected a word instead of placing the caret, and drags were unreliable. `index.html` now keeps only the touch path for finger and pen (mouse unchanged) and turns off the browser's own panning, selection callout and magnifier on the canvas. Included in `ipad.patch`.
+
+Two fingers scroll the page: a first touch is held back 90 ms, and a second finger landing in that window turns the gesture into a scroll (sent to the editor as wheel events); otherwise the press is replayed and one finger or the pen selects as before.
