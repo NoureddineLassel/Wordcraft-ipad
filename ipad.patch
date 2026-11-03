@@ -1,8 +1,8 @@
 diff --git a/apps/wordcraft-web/index.html b/apps/wordcraft-web/index.html
-index ca6ad46..9555d65 100644
+index ca6ad46..67c4525 100644
 --- a/apps/wordcraft-web/index.html
 +++ b/apps/wordcraft-web/index.html
-@@ -3,15 +3,103 @@
+@@ -3,15 +3,110 @@
  <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
@@ -97,8 +97,15 @@ index ca6ad46..9555d65 100644
 +          e.stopImmediatePropagation(); e.preventDefault();
 +          return;
 +        }
-+        if (mode === "pending") commit(); // a quick tap: press now, the release follows
-+        if (e.type === "touchcancel" && mode === "single") mouse("pointerup", last.x, last.y, 0);
++        if (mode === "pending") commit(); // a quick tap: press now, release below
++        if (mode === "single") {
++          // Release as a mouse button inside this (trusted) touch handler: eframe runs the app
++          // right away on a pointerup, which Safari requires for opening the file picker.
++          const t = e.changedTouches[0] || last;
++          mouse("pointerup", t.clientX ?? t.x, t.clientY ?? t.y, 0);
++          canvas().dispatchEvent(new MouseEvent("mouseleave"));
++          e.stopImmediatePropagation(); e.preventDefault();
++        }
 +        if (e.touches.length === 0) mode = "idle";
 +      };
 +      window.addEventListener("touchend", end, { capture: true, passive: false });
