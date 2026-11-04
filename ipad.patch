@@ -1,8 +1,8 @@
 diff --git a/apps/wordcraft-web/index.html b/apps/wordcraft-web/index.html
-index ca6ad46..67c4525 100644
+index ca6ad46..2bcbf25 100644
 --- a/apps/wordcraft-web/index.html
 +++ b/apps/wordcraft-web/index.html
-@@ -3,15 +3,110 @@
+@@ -3,15 +3,189 @@
  <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
@@ -20,6 +20,12 @@ index ca6ad46..67c4525 100644
 +    /* Touch and pen go to the editor only: no browser panning, text selection, callout or magnifier. */
 +    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
 +      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
++    #wordcraft_scrollstrip { position: fixed; right: 0; top: 170px; bottom: 34px; width: 34px; z-index: 5;
++      touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
++      display: flex; align-items: center; justify-content: center; }
++    #wordcraft_scrollstrip span { width: 6px; height: 72px; border-radius: 3px; background: rgba(60, 90, 220, 0.35); transition: all .15s; }
++    #wordcraft_scrollstrip.active span { width: 10px; height: 120px; background: rgba(60, 90, 220, 0.7); }
++    @media (hover: hover) and (pointer: fine) { #wordcraft_scrollstrip { display: none; } }
      #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
        color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
    </style>
@@ -31,14 +37,23 @@ index ca6ad46..67c4525 100644
 +      window.addEventListener(name, (e) => { if (e.isTrusted && e.pointerType !== "mouse") e.stopImmediatePropagation(); }, true);
 +    }
 +
-+    // Two fingers scroll the page; one finger or the pen still places the caret and selects.
++    // Safari zooms the whole page on a pinch even with user-scalable=no; the editor has its own zoom.
++    for (const name of ["gesturestart", "gesturechange", "gestureend"]) {
++      document.addEventListener(name, (e) => e.preventDefault(), { passive: false });
++    }
++
++    // Scrolling by touch, sent to the editor as small wheel steps (the editor eases large steps,
++    // which made the page jump): two fingers anywhere on the page, or one finger on the strip at
++    // the right edge. The motion is locked to one direction and keeps gliding after the fingers
++    // lift. One finger elsewhere, or the pen, still places the caret and selects.
 +    // A first touch is held back briefly: a second finger landing in that window makes the gesture
 +    // a scroll, and the editor never sees a press. Otherwise the press is replayed as a mouse
 +    // press and the rest of the touch goes through unchanged.
 +    (() => {
-+      const HOLD_MS = 90;
++      const HOLD_MS = 140, STRIP_GAIN = 2.5, STEP = 6, FRICTION = 0.94;
 +      let mode = "idle"; // idle | pending | single | scroll
-+      let start = null, timer = 0, last = null;
++      let start = null, timer = 0, last = null, axis = null, moved = 0, gain = 1;
++      let samples = [], glide = 0;
 +      const canvas = () => document.getElementById("wordcraft_canvas");
 +      const onCanvas = (e) => e.target === canvas();
 +      const mouse = (type, x, y, buttons) => canvas().dispatchEvent(new PointerEvent(type, {
@@ -49,22 +64,89 @@ index ca6ad46..67c4525 100644
 +        for (const t of touches) { x += t.clientX; y += t.clientY; }
 +        return { x: x / touches.length, y: y / touches.length };
 +      };
++      // The point the editor scrolls under: the middle of the page area.
++      const aim = () => ({ x: innerWidth / 2, y: innerHeight * 0.6 });
++      const wheel = (dx, dy) => {
++        const p = aim();
++        canvas().dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: p.x, clientY: p.y }));
++        const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / STEP));
++        for (let i = 0; i < n; i++) {
++          canvas().dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaMode: 0,
++            deltaX: dx / n, deltaY: dy / n, clientX: p.x, clientY: p.y }));
++        }
++      };
++      const stopGlide = () => { cancelAnimationFrame(glide); glide = 0; };
++      const beginScroll = (p, g) => {
++        stopGlide();
++        mode = "scroll"; last = p; axis = null; moved = 0; gain = g; samples = [];
++      };
++      const scrollTo = (p) => {
++        let dx = (last.x - p.x) * gain, dy = (last.y - p.y) * gain;
++        last = p;
++        moved += Math.hypot(dx, dy);
++        if (!axis) {
++          if (moved < 8) return;
++          axis = Math.abs(dy) >= Math.abs(dx) ? "y" : "x";
++        }
++        if (axis === "y") dx = 0; else dy = 0;
++        samples.push({ t: performance.now(), dx, dy });
++        if (samples.length > 6) samples.shift();
++        wheel(dx, dy);
++      };
++      const release = () => {
++        mode = "idle";
++        const now = performance.now();
++        const recent = samples.filter((s) => now - s.t < 100);
++        if (recent.length < 2) { canvas().dispatchEvent(new MouseEvent("mouseleave")); return; }
++        const dt = Math.max(16, now - recent[0].t);
++        let vx = recent.reduce((a, s) => a + s.dx, 0) / dt * 16, vy = recent.reduce((a, s) => a + s.dy, 0) / dt * 16;
++        const step = () => {
++          vx *= FRICTION; vy *= FRICTION;
++          if (Math.hypot(vx, vy) < 0.5) { glide = 0; canvas().dispatchEvent(new MouseEvent("mouseleave")); return; }
++          wheel(vx, vy);
++          glide = requestAnimationFrame(step);
++        };
++        glide = requestAnimationFrame(step);
++      };
 +      const commit = () => {
 +        clearTimeout(timer);
 +        if (mode !== "pending") return;
 +        mode = "single";
 +        mouse("pointerdown", start.x, start.y, 1);
 +      };
-+      const toScroll = (e) => {
-+        if (mode === "pending") clearTimeout(timer);
-+        if (mode === "single") mouse("pointerup", last.x, last.y, 0);
-+        mode = "scroll";
-+        last = center(e.touches);
++
++      // The strip: one finger drags the paper, faster than the finger itself.
++      const strip = document.createElement("div");
++      strip.id = "wordcraft_scrollstrip";
++      strip.innerHTML = "<span></span>";
++      addEventListener("DOMContentLoaded", () => document.body.appendChild(strip));
++      strip.addEventListener("touchstart", (e) => {
++        e.preventDefault(); e.stopPropagation();
++        strip.classList.add("active");
++        beginScroll(center(e.touches), STRIP_GAIN);
++      }, { passive: false });
++      strip.addEventListener("touchmove", (e) => {
++        e.preventDefault(); e.stopPropagation();
++        if (mode === "scroll") scrollTo(center(e.touches));
++      }, { passive: false });
++      const stripEnd = (e) => {
++        e.preventDefault(); e.stopPropagation();
++        if (e.touches.length === 0) { strip.classList.remove("active"); if (mode === "scroll") release(); }
 +      };
++      strip.addEventListener("touchend", stripEnd, { passive: false });
++      strip.addEventListener("touchcancel", stripEnd, { passive: false });
++
 +      window.addEventListener("touchstart", (e) => {
-+        if (!onCanvas(e) && mode === "idle") return;
++        if (strip.contains(e.target) || (!onCanvas(e) && mode === "idle")) return;
++        stopGlide();
 +        if (e.touches.length >= 2) {
-+          toScroll(e);
++          if (mode !== "scroll") {
++            if (mode === "pending") clearTimeout(timer);
++            if (mode === "single") mouse("pointerup", last.x, last.y, 0);
++            beginScroll(center(e.touches), 1);
++          } else {
++            last = center(e.touches);
++          }
 +          e.stopImmediatePropagation(); e.preventDefault();
 +          return;
 +        }
@@ -76,14 +158,10 @@ index ca6ad46..67c4525 100644
 +        e.stopImmediatePropagation(); e.preventDefault();
 +      }, { capture: true, passive: false });
 +      window.addEventListener("touchmove", (e) => {
++        if (strip.contains(e.target)) return;
 +        if (mode === "scroll") {
-+          if (e.touches.length >= 2) {
-+            const c = center(e.touches);
-+            canvas().dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: c.x, clientY: c.y }));
-+            canvas().dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaMode: 0,
-+              deltaX: last.x - c.x, deltaY: last.y - c.y, clientX: c.x, clientY: c.y }));
-+            last = c;
-+          }
++          // Only while both fingers are down: one finger lifting first must not jerk the page.
++          if (e.touches.length >= 2) scrollTo(center(e.touches));
 +          e.stopImmediatePropagation(); e.preventDefault();
 +          return;
 +        }
@@ -91,8 +169,9 @@ index ca6ad46..67c4525 100644
 +        if (mode === "single" && e.touches.length) last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 +      }, { capture: true, passive: false });
 +      const end = (e) => {
++        if (strip.contains(e.target)) return;
 +        if (mode === "scroll") {
-+          if (e.touches.length === 0) mode = "idle";
++          if (e.touches.length === 0) release();
 +          else last = center(e.touches);
 +          e.stopImmediatePropagation(); e.preventDefault();
 +          return;
