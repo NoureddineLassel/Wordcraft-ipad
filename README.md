@@ -21,3 +21,11 @@ Scrolling (rev. 2): Safari's pinch zoom is blocked; finger motion is locked to o
 ## Zotero
 
 The desktop Zotero integration needs the Zotero app on the same computer, which a web page cannot reach. The red **Zotero** button opens a panel that searches the user's zotero.org library through the Zotero Web API (API key only, stored in the browser; the user ID comes from `/keys/current`) and adds the chosen items as document sources, so WordCraft's own live citations, citation styles and bibliography cite them. The web shell runs commands the page queues in `window.__wcQueue` (see `apps/wordcraft-web/src/web.rs` in `ipad.patch`).
+
+### Chicago 17th / 18th edition full note
+The Zotero panel's style list starts with "Chicago 17 – full note" and "Chicago 18 – full note".
+Each citation is inserted as a footnote: the first citation of a source is a full note, later
+ones are short notes, and the 17th edition uses "Ibid." when the same source is cited twice in a row.
+The 17th edition keeps the place of publication and uses "et al." from four authors; the 18th drops
+the place and uses "et al." from three. "Insert bibliography" builds a Chicago bibliography from the
+sources cited in the footnotes. Notes are plain text, not live fields.

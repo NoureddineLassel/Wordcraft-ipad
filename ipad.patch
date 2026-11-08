@@ -1,8 +1,8 @@
 diff --git a/apps/wordcraft-web/index.html b/apps/wordcraft-web/index.html
-index ca6ad46..0144f55 100644
+index ca6ad46..530afcb 100644
 --- a/apps/wordcraft-web/index.html
 +++ b/apps/wordcraft-web/index.html
-@@ -3,15 +3,369 @@
+@@ -3,15 +3,500 @@
  <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
@@ -262,6 +262,92 @@ index ca6ad46..0144f55 100644
 +        };
 +      };
 +
++
++      const people = (d, type) => (d.creators || []).filter((c) => c.creatorType === type)
++        .map((c) => c.name ? { first: "", last: c.name } : { first: c.firstName || "", last: c.lastName || "" });
++      const authorsOf = (d) => { const a = people(d, "author"); return a.length ? a : people(d, "contributor"); };
++      const yearOf = (it) => ((it.meta && it.meta.parsedDate) || it.data.date || "").match(/\d{4}/)?.[0] || "n.d.";
++      const fullName = (p) => [p.first, p.last].filter(Boolean).join(" ");
++      const andList = (xs) => xs.length <= 2 ? xs.join(" and ") : xs.slice(0, -1).join(", ") + ", and " + xs[xs.length - 1];
++      const noteAuthors = (ps, ed, short) => {
++        if (!ps.length) return "";
++        const etAl = ed === 18 ? ps.length >= 3 : ps.length >= 4;
++        if (etAl) return (short ? ps[0].last : fullName(ps[0])) + " et al.";
++        return andList(ps.map((p) => short ? p.last : fullName(p)));
++      };
++      const bibAuthors = (ps) => {
++        if (!ps.length) return "";
++        const first = [ps[0].last, ps[0].first].filter(Boolean).join(", ");
++        const rest = ps.slice(1).map(fullName);
++        return ps.length === 1 ? first : (ps.length === 2 ? first + ", and " + rest[0] : [first, ...rest.slice(0, -1)].join(", ") + ", and " + rest[rest.length - 1]);
++      };
++      const shortTitle = (t) => { const w = t.replace(/[:.?!].*$/, "").split(/\s+/); return w.length > 4 ? w.slice(0, 4).join(" ") : w.join(" "); };
++      const isBookish = (d) => ["book", "thesis", "report", "film"].includes(d.itemType);
++      const doiUrl = (d) => d.DOI ? "https://doi.org/" + d.DOI.replace(/^https?:\/\/(dx\.)?doi\.org\//, "") : (d.url || "");
++      const pubBlock = (d, it, ed) => {
++        const place = ed === 17 ? (d.place || "") : "";
++        const pub = d.publisher || d.institution || d.university || "";
++        const head = [place, pub].filter(Boolean).join(": ");
++        return [head, yearOf(it)].filter(Boolean).join(", ");
++      };
++      const dash = (s) => String(s || "").replace(/(\d)\s*[-‐‑–—]\s*(\d)/g, "$1–$2");
++      // A note or bibliography entry as [text, italic] runs.
++      const chicagoNote = (it, ed, kind, page, ibid) => {
++        page = page ? dash(page) : page;
++        const d = it.data, au = authorsOf(d), pg = page ? ", " + page : "";
++        if (kind === "ibid") return [["Ibid" + (page ? "., " + page : "") + ".", false]];
++        if (kind === "short") {
++          const a = noteAuthors(au, ed, true);
++          const t = shortTitle(d.title || "");
++          return isBookish(d) ? [[a ? a + ", " : "", false], [t, true], [pg + ".", false]]
++                              : [[(a ? a + ", " : "") + "“" + t + (page ? ",” " + page + "." : ".”"), false]];
++        }
++        const a = noteAuthors(au, ed, false), eds = people(d, "editor").map(fullName);
++        const lead = a ? a + ", " : "";
++        switch (d.itemType) {
++          case "journalArticle": case "magazineArticle": case "newspaperArticle": {
++            const vol = [d.volume, d.issue ? "no. " + d.issue : ""].filter(Boolean).join(", ");
++            const where = (vol ? " " + vol : "") + " (" + (d.date && d.itemType !== "journalArticle" ? d.date : yearOf(it)) + ")";
++            const url = doiUrl(d);
++            return [[lead + "“" + (d.title || "") + ",” ", false], [d.publicationTitle || "", true],
++                    [where + (page ? ": " + page : (d.pages ? ": " + dash(d.pages) : "")) + (url ? ", " + url : "") + ".", false]];
++          }
++          case "bookSection": case "conferencePaper":
++            return [[lead + "“" + (d.title || "") + ",” in ", false], [d.bookTitle || d.proceedingsTitle || "", true],
++                    [(eds.length ? ", ed. " + andList(eds) : "") + " (" + pubBlock(d, it, ed) + ")" + pg + ".", false]];
++          case "webpage": case "blogPost":
++            return [[lead + "“" + (d.title || "") + ",” " + (d.websiteTitle || d.blogTitle || "") + (d.date ? ", " + d.date : "") + (d.url ? ", " + d.url : "") + ".", false]];
++          default:
++            return [[lead, false], [d.title || "", true],
++                    [(eds.length ? ", ed. " + andList(eds) : "") + (d.edition ? ", " + d.edition + " ed." : "") + " (" + pubBlock(d, it, ed) + ")" + pg + ".", false]];
++        }
++      };
++      const chicagoBib = (it, ed) => {
++        const d = it.data, a = bibAuthors(authorsOf(d)), eds = people(d, "editor").map(fullName);
++        const lead = a ? a + ". " : "";
++        const pubDot = () => [ed === 17 ? (d.place || "") : "", d.publisher || d.institution || d.university || ""].filter(Boolean).join(": ");
++        switch (d.itemType) {
++          case "journalArticle": case "magazineArticle": case "newspaperArticle": {
++            const vol = [d.volume, d.issue ? "no. " + d.issue : ""].filter(Boolean).join(", "), url = doiUrl(d);
++            return [[lead + "“" + (d.title || "") + ".” ", false], [d.publicationTitle || "", true],
++                    [(vol ? " " + vol : "") + " (" + yearOf(it) + ")" + (d.pages ? ": " + dash(d.pages) : "") + "." + (url ? " " + url + "." : ""), false]];
++          }
++          case "bookSection": case "conferencePaper":
++            return [[lead + "“" + (d.title || "") + ".” In ", false], [d.bookTitle || d.proceedingsTitle || "", true],
++                    [(eds.length ? ", edited by " + andList(eds) : "") + (d.pages ? ", " + dash(d.pages) : "") + ". " + [pubDot(), yearOf(it)].filter(Boolean).join(", ") + ".", false]];
++          case "webpage": case "blogPost":
++            return [[lead + "“" + (d.title || "") + ".” " + (d.websiteTitle || d.blogTitle || "") + (d.date ? ". " + d.date : "") + "." + (d.url ? " " + d.url + "." : ""), false]];
++          default:
++            return [[lead, false], [d.title || "", true],
++                    [". " + (eds.length ? "Edited by " + andList(eds) + ". " : "") + (d.edition ? d.edition + " ed. " : "") + [pubDot(), yearOf(it)].filter(Boolean).join(", ") + ".", false]];
++        }
++      };
++      const sortKey = (it) => (bibAuthors(authorsOf(it.data)) || it.data.title || "").toLowerCase();
++      // Chicago notes and bibliography (full note), written here: the editor's own styles are
++      // author-date. 17th edition: place of publication, four or more authors as "et al.", and
++      // "Ibid." for the same source twice in a row. 18th edition: no place, three or more authors
++      // as "et al." in notes, and a short note instead of "Ibid.".
++      const NOTE_STYLES = { note17: "Chicago 17 – full note", note18: "Chicago 18 – full note" };
 +      const STYLES = ["APA", "Chicago", "MLA", "Harvard (Anglia)", "IEEE", "ISO 690 (author-date)", "ISO 690 (numerical)", "Turabian", "GB/T 7714", "GOST (name sort)", "SIST02"];
 +      const html = `
 +        <h3><span>Zotero</span><button id="zt_close" aria-label="إغلاق">✕</button></h3>
@@ -276,7 +362,7 @@ index ca6ad46..0144f55 100644
 +          <div class="row"><input id="zt_q" placeholder="ابحث: مؤلف، عنوان، سنة…" enterkeyhint="search"><button id="zt_go" class="primary">بحث</button></div>
 +          <div id="zt_results"></div>
 +          <div class="row"><input id="zt_pages" placeholder="الصفحات (اختياري)" style="flex:1"><button id="zt_cite" class="primary" style="flex:1.4">إدراج إحالة</button></div>
-+          <div class="row"><select id="zt_style">${STYLES.map((s) => `<option>${s}</option>`).join("")}</select><button id="zt_bib" style="flex:1.4">إدراج قائمة المراجع</button></div>
++          <div class="row"><select id="zt_style">${Object.entries(NOTE_STYLES).map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}${STYLES.map((s) => `<option>${s}</option>`).join("")}</select><button id="zt_bib" style="flex:1.4">إدراج قائمة المراجع</button></div>
 +          <div class="row"><span id="zt_status" class="muted" style="flex:1"></span><button id="zt_reset">تغيير الحساب</button></div>
 +        </div>`;
 +
@@ -291,7 +377,7 @@ index ca6ad46..0144f55 100644
 +        const status = (t) => { $("zt_status").textContent = t; };
 +        const showSetup = (on) => { $("zt_setup").style.display = on ? "" : "none"; $("zt_main").style.display = on ? "none" : ""; };
 +        const refresh = () => showSetup(!(store.get("user") && store.get("key")));
-+        $("zt_style").value = store.get("style") || "APA";
++        $("zt_style").value = store.get("style") || "note18";
 +        btn.addEventListener("click", () => { panel.classList.toggle("open"); refresh(); });
 +        $("zt_close").addEventListener("click", () => panel.classList.remove("open"));
 +        // The key tells which library it opens: no need to ask for the user ID.
@@ -340,28 +426,73 @@ index ca6ad46..0144f55 100644
 +        };
 +        $("zt_go").addEventListener("click", search);
 +        $("zt_q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
++        // What the document's footnotes already cite: an item is cited when a note holds its
++        // (short) title, so reopening a document or deleting a note keeps this right.
++        const notesNow = async () => { const n = await run("references.notes", {}); return (Array.isArray(n) ? n : []).sort((a, b) => a.id - b.id); };
++        const citesItem = (text, it) => { const t = shortTitle(it.data.title || ""); return t.length > 0 && text.includes(t); };
++        const remember = (it) => { let lib = {}; try { lib = JSON.parse(store.get("items") || "{}"); } catch {} lib[it.key] = it; store.set("items", JSON.stringify(lib)); };
++        const typeRuns = async (runs) => {
++          for (const [text, italic] of runs) {
++            if (!text) continue;
++            await run("format.italic", { value: italic });
++            await run("text.insert", { text, raw: true });
++          }
++          await run("format.italic", { value: false });
++        };
++        const isNote = () => $("zt_style").value in NOTE_STYLES;
++        const edition = () => $("zt_style").value === "note17" ? 17 : 18;
 +        $("zt_cite").addEventListener("click", async () => {
 +          if (chosen < 0) { status("اختر مرجعًا من النتائج أولًا."); return; }
-+          const params = { source: toSource(items[chosen]) };
-+          const pages = $("zt_pages").value.trim();
-+          if (pages) params.pages = pages;
++          const item = items[chosen], pages = $("zt_pages").value.trim();
 +          try {
-+            await run("references.citationStyle", { style: $("zt_style").value });
-+            await run("references.citation", params);
-+            status("أُدرجت الإحالة في موضع المؤشر.");
++            if (isNote()) {
++              const ed = edition(), notes = await notesNow();
++              const before = notes.some((n) => citesItem(n.text, item));
++              const prev = notes[notes.length - 1];
++              const prevIsThis = prev && (citesItem(prev.text, item) || (/^\s*Ibid/.test(prev.text) && store.get("lastKey") === item.key));
++              const kind = !before ? "full" : (ed === 17 && prevIsThis ? "ibid" : "short");
++              const here = await run("select.collapse", {});
++              await run("references.footnote", {});
++              await typeRuns(chicagoNote(item, ed, kind, pages));
++              await run("caret.set", { pos: here.focus });
++              await run("caret.right", {});
++              store.set("lastKey", item.key); remember(item);
++              status(kind === "full" ? "أُدرجت حاشية كاملة." : kind === "ibid" ? "أُدرجت حاشية Ibid." : "أُدرجت حاشية مختصرة (المرجع ذُكر سابقًا).");
++            } else {
++              const params = { source: toSource(item) };
++              if (pages) params.pages = pages;
++              await run("references.citationStyle", { style: $("zt_style").value });
++              await run("references.citation", params);
++              status("أُدرجت الإحالة في موضع المؤشر.");
++            }
 +            $("zt_pages").value = "";
 +          } catch (e) { status(e.message); }
 +        });
 +        $("zt_style").addEventListener("change", async () => {
 +          store.set("style", $("zt_style").value);
++          if (isNote()) { status("الإحالات القادمة تُدرج كحواشٍ سفلية بنمط " + NOTE_STYLES[$("zt_style").value] + "."); return; }
 +          try { await run("references.citationStyle", { style: $("zt_style").value }); status("غُيّر النمط لكل الإحالات."); }
 +          catch (e) { status(e.message); }
 +        });
 +        $("zt_bib").addEventListener("click", async () => {
 +          try {
-+            await run("references.citationStyle", { style: $("zt_style").value });
-+            await run("references.bibliography", {});
-+            status("أُدرجت قائمة المراجع في موضع المؤشر.");
++            if (isNote()) {
++              let lib = {}; try { lib = JSON.parse(store.get("items") || "{}"); } catch {}
++              const notes = await notesNow();
++              const cited = Object.values(lib).filter((it) => notes.some((n) => citesItem(n.text, it))).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
++              if (!cited.length) { status("لا توجد حواشٍ مُدرجة بعد في هذا المستند."); return; }
++              await typeRuns([["Bibliography", false]]);
++              for (const it of cited) {
++                await run("text.newParagraph", {});
++                await typeRuns(chicagoBib(it, edition()));
++                await run("para.hangingIndent", {});
++              }
++              status("أُدرجت قائمة المراجع (" + cited.length + ").");
++            } else {
++              await run("references.citationStyle", { style: $("zt_style").value });
++              await run("references.bibliography", {});
++              status("أُدرجت قائمة المراجع في موضع المؤشر.");
++            }
 +          } catch (e) { status(e.message); }
 +        });
 +        // Keys typed in the panel belong to the panel, not the document.
