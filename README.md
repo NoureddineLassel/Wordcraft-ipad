@@ -17,3 +17,7 @@ eframe turned both the pointer events and the touch events of one touch into pre
 Two fingers scroll the page: a first touch is held back 90 ms, and a second finger landing in that window turns the gesture into a scroll (sent to the editor as wheel events); otherwise the press is replayed and one finger or the pen selects as before.
 
 Scrolling (rev. 2): Safari's pinch zoom is blocked; finger motion is locked to one direction, sent as small wheel steps (the editor eases large ones, which made the page jump) and keeps gliding after the fingers lift. A strip on the right edge scrolls with one finger. Hidden on devices with a mouse.
+
+## Zotero
+
+The desktop Zotero integration needs the Zotero app on the same computer, which a web page cannot reach. The red **Zotero** button opens a panel that searches the user's zotero.org library through the Zotero Web API (userID + API key, stored only in the browser) and adds the chosen items as document sources, so WordCraft's own live citations, citation styles and bibliography cite them. The web shell runs commands the page queues in `window.__wcQueue` (see `apps/wordcraft-web/src/web.rs` in `ipad.patch`).

@@ -10,8 +10,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-9ad9fd3b15af2459.js';
-const wasm = await init({ module_or_path: './wordcraft-web-9ad9fd3b15af2459_bg.wasm' });
+import init, * as bindings from './wordcraft-web-2846c59fdd218e37.js';
+const wasm = await init({ module_or_path: './wordcraft-web-2846c59fdd218e37_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -32,6 +32,27 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
     #wordcraft_scrollstrip span { width: 6px; height: 72px; border-radius: 3px; background: rgba(60, 90, 220, 0.35); transition: all .15s; }
     #wordcraft_scrollstrip.active span { width: 10px; height: 120px; background: rgba(60, 90, 220, 0.7); }
     @media (hover: hover) and (pointer: fine) { #wordcraft_scrollstrip { display: none; } }
+    #zt_button { position: fixed; left: 12px; bottom: 34px; z-index: 6; border: none; border-radius: 18px;
+      padding: 7px 14px; font: 600 13px system-ui, sans-serif; color: #fff; background: #cc2936;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+    #zt_panel { position: fixed; left: 12px; bottom: 76px; z-index: 7; width: min(420px, calc(100vw - 24px));
+      max-height: calc(100vh - 140px); display: none; flex-direction: column; gap: 8px; padding: 12px;
+      background: #fff; color: #222; border-radius: 12px; box-shadow: 0 6px 28px rgba(0,0,0,.3);
+      font: 14px system-ui, sans-serif; direction: rtl; touch-action: manipulation; }
+    #zt_panel.open { display: flex; }
+    #zt_panel h3 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+    #zt_panel input, #zt_panel select { font: 15px system-ui, sans-serif; padding: 7px 8px; border: 1px solid #bbb;
+      border-radius: 7px; direction: ltr; width: 100%; box-sizing: border-box; }
+    #zt_panel button { font: 14px system-ui, sans-serif; padding: 7px 10px; border-radius: 7px; border: 1px solid #bbb; background: #f4f4f4; color: #222; }
+    #zt_panel button.primary { background: #3c5adc; border-color: #3c5adc; color: #fff; }
+    #zt_panel .row { display: flex; gap: 6px; align-items: center; }
+    #zt_panel .muted { color: #666; font-size: 12px; }
+    #zt_results { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 60px; max-height: 40vh;
+      border: 1px solid #e3e3e3; border-radius: 8px; direction: ltr; }
+    #zt_results div { padding: 8px 10px; border-bottom: 1px solid #eee; }
+    #zt_results div.sel { background: #e3e9ff; }
+    #zt_results b { font-weight: 600; }
+    #zt_status { min-height: 16px; }
     #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
   </style>
@@ -197,7 +218,154 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       window.addEventListener("touchcancel", end, { capture: true, passive: false });
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-9ad9fd3b15af2459.js" crossorigin="anonymous" integrity="sha384-v+QWXwsFBVgFVCvgVyU4XXAxxuFxcLeI9HNMPMlMsfN/OP6BBk++wMUUpFTocKij"><link rel="preload" href="./wordcraft-web-9ad9fd3b15af2459_bg.wasm" crossorigin="anonymous" integrity="sha384-yMpnMrHii0C6giKHPzB1ZwbYktN9O7MWzKrdiL3ZiOXyPyJMgtRQZkwVBuSayvpg" as="fetch" type="application/wasm"></head>
+
+  <script>
+    // Zotero on the web: the desktop integration needs the Zotero app on the same computer, which a
+    // browser can't reach. This panel searches the zotero.org library instead (Zotero Web API, with
+    // the user's own key kept in this browser) and adds items as the document's sources, so the
+    // editor's own citations and bibliography (live, any of its styles) cite them.
+    (() => {
+      const store = {
+        get: (k) => { try { return localStorage.getItem("wc_zotero_" + k) || ""; } catch { return ""; } },
+        set: (k, v) => { try { localStorage.setItem("wc_zotero_" + k, v); } catch {} },
+      };
+      let seq = 0;
+      const waiting = new Map();
+      window.__wcQueue = window.__wcQueue || [];
+      window.__wcDone = (id, ok, json) => {
+        const w = waiting.get(id); if (!w) return;
+        waiting.delete(id);
+        let v; try { v = JSON.parse(json); } catch { v = json; }
+        ok ? w.resolve(v) : w.reject(new Error(String(v)));
+      };
+      // Queue a command for the editor and wake it (it runs queued commands on its next frame).
+      const run = (cmd, params) => new Promise((resolve, reject) => {
+        const id = ++seq;
+        waiting.set(id, { resolve, reject });
+        window.__wcQueue.push({ id, cmd, params });
+        const c = document.getElementById("wordcraft_canvas");
+        c.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
+        c.dispatchEvent(new MouseEvent("mouseleave"));
+      });
+
+      const KINDS = { book: "book", bookSection: "bookSection", journalArticle: "article", magazineArticle: "periodical",
+        newspaperArticle: "periodical", conferencePaper: "conference", report: "report", thesis: "report",
+        webpage: "website", blogPost: "website", film: "film" };
+      const names = (creators, type) => creators.filter((c) => c.creatorType === type)
+        .map((c) => c.name || [c.lastName, c.firstName].filter(Boolean).join(", ")).join("; ");
+      const toSource = (item) => {
+        const d = item.data, date = (item.meta && item.meta.parsedDate) || d.date || "";
+        const y = (/\d{4}/.exec(date) || [""])[0];
+        return {
+          tag: "Zot" + item.key, kind: KINDS[d.itemType] || "other",
+          author: names(d.creators || [], "author") || names(d.creators || [], "contributor"),
+          editor: names(d.creators || [], "editor"),
+          title: d.title || "", year: y,
+          publisher: d.publisher || d.institution || d.university || "", city: d.place || "",
+          journal: d.publicationTitle || d.bookTitle || d.proceedingsTitle || d.websiteTitle || "",
+          volume: d.volume || "", issue: d.issue || "", pages: d.pages || "", edition: d.edition || "",
+          url: d.url || "", doi: d.DOI || "", accessed: (d.accessDate || "").slice(0, 10),
+        };
+      };
+
+      const STYLES = ["APA", "Chicago", "MLA", "Harvard (Anglia)", "IEEE", "ISO 690 (author-date)", "ISO 690 (numerical)", "Turabian", "GB/T 7714", "GOST (name sort)", "SIST02"];
+      const html = `
+        <h3><span>Zotero</span><button id="zt_close" aria-label="إغلاق">✕</button></h3>
+        <div id="zt_setup">
+          <div class="muted">مرة واحدة فقط: أنشئ مفتاحًا من <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>
+            (اسمح بقراءة المكتبة)، وانسخ رقم المستخدم (Your userID) الظاهر في نفس الصفحة. يُحفظان في هذا المتصفح فقط.</div>
+          <input id="zt_user" placeholder="userID" inputmode="numeric" autocomplete="off">
+          <input id="zt_key" placeholder="API key" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button id="zt_save" class="primary">حفظ</button>
+        </div>
+        <div id="zt_main">
+          <div class="row"><input id="zt_q" placeholder="ابحث: مؤلف، عنوان، سنة…" enterkeyhint="search"><button id="zt_go" class="primary">بحث</button></div>
+          <div id="zt_results"></div>
+          <div class="row"><input id="zt_pages" placeholder="الصفحات (اختياري)" style="flex:1"><button id="zt_cite" class="primary" style="flex:1.4">إدراج إحالة</button></div>
+          <div class="row"><select id="zt_style">${STYLES.map((s) => `<option>${s}</option>`).join("")}</select><button id="zt_bib" style="flex:1.4">إدراج قائمة المراجع</button></div>
+          <div class="row"><span id="zt_status" class="muted" style="flex:1"></span><button id="zt_reset">تغيير الحساب</button></div>
+        </div>`;
+
+      addEventListener("DOMContentLoaded", () => {
+        const btn = document.createElement("button");
+        btn.id = "zt_button"; btn.textContent = "Zotero";
+        const panel = document.createElement("div");
+        panel.id = "zt_panel"; panel.innerHTML = html;
+        document.body.append(btn, panel);
+        const $ = (id) => document.getElementById(id);
+        let items = [], chosen = -1;
+        const status = (t) => { $("zt_status").textContent = t; };
+        const showSetup = (on) => { $("zt_setup").style.display = on ? "" : "none"; $("zt_main").style.display = on ? "none" : ""; };
+        const refresh = () => showSetup(!(store.get("user") && store.get("key")));
+        $("zt_style").value = store.get("style") || "APA";
+        btn.addEventListener("click", () => { panel.classList.toggle("open"); refresh(); });
+        $("zt_close").addEventListener("click", () => panel.classList.remove("open"));
+        $("zt_save").addEventListener("click", () => {
+          store.set("user", $("zt_user").value.trim()); store.set("key", $("zt_key").value.trim()); refresh();
+        });
+        $("zt_reset").addEventListener("click", () => {
+          $("zt_user").value = store.get("user"); $("zt_key").value = store.get("key"); showSetup(true);
+        });
+        const render = () => {
+          $("zt_results").innerHTML = "";
+          items.forEach((it, i) => {
+            const src = toSource(it), row = document.createElement("div");
+            row.className = i === chosen ? "sel" : "";
+            const b = document.createElement("b"); b.textContent = src.title || "(untitled)";
+            row.append(b, document.createElement("br"), document.createTextNode([src.author, src.year].filter(Boolean).join(" · ")));
+            row.addEventListener("click", () => { chosen = i; render(); });
+            $("zt_results").append(row);
+          });
+        };
+        const search = async () => {
+          const q = $("zt_q").value.trim();
+          status("جارٍ البحث…");
+          try {
+            const url = `https://api.zotero.org/users/${encodeURIComponent(store.get("user"))}/items/top?` +
+              new URLSearchParams({ q, qmode: "titleCreatorYear", limit: "40", format: "json", sort: "dateModified", key: store.get("key") });
+            const r = await fetch(url, { headers: { "Zotero-API-Version": "3" } });
+            if (r.status === 403) throw new Error("المفتاح أو رقم المستخدم غير صحيح، أو المفتاح لا يسمح بقراءة المكتبة");
+            if (!r.ok) throw new Error("Zotero: " + r.status);
+            items = (await r.json()).filter((it) => it.data && !["note", "attachment", "annotation"].includes(it.data.itemType));
+            chosen = items.length ? 0 : -1;
+            render();
+            status(items.length ? `${items.length} نتيجة. اختر مرجعًا ثم «إدراج إحالة».` : "لا توجد نتائج.");
+          } catch (e) { status(e.message === "Failed to fetch" ? "تعذّر الاتصال بـ zotero.org" : e.message); }
+        };
+        $("zt_go").addEventListener("click", search);
+        $("zt_q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+        $("zt_cite").addEventListener("click", async () => {
+          if (chosen < 0) { status("اختر مرجعًا من النتائج أولًا."); return; }
+          const params = { source: toSource(items[chosen]) };
+          const pages = $("zt_pages").value.trim();
+          if (pages) params.pages = pages;
+          try {
+            await run("references.citationStyle", { style: $("zt_style").value });
+            await run("references.citation", params);
+            status("أُدرجت الإحالة في موضع المؤشر.");
+            $("zt_pages").value = "";
+          } catch (e) { status(e.message); }
+        });
+        $("zt_style").addEventListener("change", async () => {
+          store.set("style", $("zt_style").value);
+          try { await run("references.citationStyle", { style: $("zt_style").value }); status("غُيّر النمط لكل الإحالات."); }
+          catch (e) { status(e.message); }
+        });
+        $("zt_bib").addEventListener("click", async () => {
+          try {
+            await run("references.citationStyle", { style: $("zt_style").value });
+            await run("references.bibliography", {});
+            status("أُدرجت قائمة المراجع في موضع المؤشر.");
+          } catch (e) { status(e.message); }
+        });
+        // Keys typed in the panel belong to the panel, not the document.
+        for (const t of ["keydown", "keyup", "keypress", "input", "compositionstart", "compositionupdate", "compositionend", "paste", "copy", "cut"]) {
+          panel.addEventListener(t, (e) => e.stopPropagation());
+        }
+      });
+    })();
+  </script>
+<link rel="modulepreload" href="./wordcraft-web-2846c59fdd218e37.js" crossorigin="anonymous" integrity="sha384-cfXJCpjkQU4fwkh9K11nwriFQDtzo1lrwq6VlCxZ12jyz4v/7k/f9kLNRpefG33v"><link rel="preload" href="./wordcraft-web-2846c59fdd218e37_bg.wasm" crossorigin="anonymous" integrity="sha384-/FIxkfEv87s9AJrCesdp1HwuV+JZ40AhIfNp+IN0JnXOq+CTxC+n4quwINm0uRw3" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>
