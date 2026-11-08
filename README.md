@@ -20,4 +20,4 @@ Scrolling (rev. 2): Safari's pinch zoom is blocked; finger motion is locked to o
 
 ## Zotero
 
-The desktop Zotero integration needs the Zotero app on the same computer, which a web page cannot reach. The red **Zotero** button opens a panel that searches the user's zotero.org library through the Zotero Web API (userID + API key, stored only in the browser) and adds the chosen items as document sources, so WordCraft's own live citations, citation styles and bibliography cite them. The web shell runs commands the page queues in `window.__wcQueue` (see `apps/wordcraft-web/src/web.rs` in `ipad.patch`).
+The desktop Zotero integration needs the Zotero app on the same computer, which a web page cannot reach. The red **Zotero** button opens a panel that searches the user's zotero.org library through the Zotero Web API (API key only, stored in the browser; the user ID comes from `/keys/current`) and adds the chosen items as document sources, so WordCraft's own live citations, citation styles and bibliography cite them. The web shell runs commands the page queues in `window.__wcQueue` (see `apps/wordcraft-web/src/web.rs` in `ipad.patch`).

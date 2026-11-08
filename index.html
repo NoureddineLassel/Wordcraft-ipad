@@ -272,11 +272,11 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       const html = `
         <h3><span>Zotero</span><button id="zt_close" aria-label="إغلاق">✕</button></h3>
         <div id="zt_setup">
-          <div class="muted">مرة واحدة فقط: أنشئ مفتاحًا من <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>
-            (اسمح بقراءة المكتبة)، وانسخ رقم المستخدم (Your userID) الظاهر في نفس الصفحة. يُحفظان في هذا المتصفح فقط.</div>
-          <input id="zt_user" placeholder="userID" inputmode="numeric" autocomplete="off">
+          <div class="muted">مرة واحدة فقط: أنشئ مفتاحًا من <a href="https://www.zotero.org/settings/keys/new" target="_blank" rel="noopener">zotero.org/settings/keys/new</a>
+            (اسمح بقراءة المكتبة)، ثم ألصقه هنا. يُحفظ في هذا المتصفح فقط.</div>
           <input id="zt_key" placeholder="API key" autocomplete="off" autocapitalize="off" spellcheck="false">
           <button id="zt_save" class="primary">حفظ</button>
+          <div id="zt_setup_status" class="muted"></div>
         </div>
         <div id="zt_main">
           <div class="row"><input id="zt_q" placeholder="ابحث: مؤلف، عنوان، سنة…" enterkeyhint="search"><button id="zt_go" class="primary">بحث</button></div>
@@ -300,12 +300,24 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         $("zt_style").value = store.get("style") || "APA";
         btn.addEventListener("click", () => { panel.classList.toggle("open"); refresh(); });
         $("zt_close").addEventListener("click", () => panel.classList.remove("open"));
-        $("zt_save").addEventListener("click", () => {
-          store.set("user", $("zt_user").value.trim()); store.set("key", $("zt_key").value.trim()); refresh();
+        // The key tells which library it opens: no need to ask for the user ID.
+        $("zt_save").addEventListener("click", async () => {
+          const key = $("zt_key").value.trim();
+          $("zt_setup_status").textContent = "جارٍ التحقق من المفتاح…";
+          try {
+            const r = await fetch("https://api.zotero.org/keys/current?" + new URLSearchParams({ key }), { headers: { "Zotero-API-Version": "3" } });
+            if (!r.ok) throw new Error(r.status === 403 || r.status === 404 ? "المفتاح غير صحيح" : "Zotero: " + r.status);
+            const info = await r.json();
+            if (!info.userID) throw new Error("المفتاح غير صحيح");
+            store.set("user", String(info.userID)); store.set("key", key);
+            $("zt_setup_status").textContent = "";
+            refresh();
+            status(`مرحبًا ${info.username || ""}. ابحث عن مرجع.`);
+          } catch (e) {
+            $("zt_setup_status").textContent = e.message === "Failed to fetch" ? "تعذّر الاتصال بـ zotero.org" : e.message;
+          }
         });
-        $("zt_reset").addEventListener("click", () => {
-          $("zt_user").value = store.get("user"); $("zt_key").value = store.get("key"); showSetup(true);
-        });
+        $("zt_reset").addEventListener("click", () => { $("zt_key").value = store.get("key"); showSetup(true); });
         const render = () => {
           $("zt_results").innerHTML = "";
           items.forEach((it, i) => {
