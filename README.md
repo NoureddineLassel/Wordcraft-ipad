@@ -18,6 +18,13 @@ Two fingers scroll the page: a first touch is held back 90 ms, and a second fing
 
 Scrolling (rev. 2): Safari's pinch zoom is blocked; finger motion is locked to one direction, sent as small wheel steps (the editor eases large ones, which made the page jump) and keeps gliding after the fingers lift. A strip on the right edge scrolls with one finger. Hidden on devices with a mouse.
 
+### Copy, cut and paste by touch
+Hold a finger still on the page (about half a second) to open a bar with Cut, Copy, Paste,
+Select All and More… (the editor's full right-click menu). Holding no longer presses, so the
+current selection is kept. The bar also appears after selecting text by dragging a finger.
+Copy and Cut write the system clipboard; Paste reads it (Safari asks to allow it once per paste)
+and falls back to the editor's own last copy.
+
 ## Zotero
 
 The desktop Zotero integration needs the Zotero app on the same computer, which a web page cannot reach. The red **Zotero** button opens a panel that searches the user's zotero.org library through the Zotero Web API (API key only, stored in the browser; the user ID comes from `/keys/current`) and adds the chosen items as document sources, so WordCraft's own live citations, citation styles and bibliography cite them. The web shell runs commands the page queues in `window.__wcQueue` (see `apps/wordcraft-web/src/web.rs` in `ipad.patch`).
